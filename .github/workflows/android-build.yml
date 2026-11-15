@@ -46,7 +46,9 @@ jobs:
       - name: Configure Android 16 SDK
         run: |
           sed -i 's/compileSdk = 37/compileSdk = 36/' app/build.gradle.kts
-
+      - name: Configure Gradle compatibility
+        run: |
+          echo "android.sourceset.disallowProvider=false" >> gradle.properties
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
