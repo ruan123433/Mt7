@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   android:
-    name: Test and build debug APK
+    name: Build MT7 APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -20,13 +20,40 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
+      - name: Extract MT7 source ZIP
+        run: |
+          archive="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
+          if [ -z "$archive" ]; then
+            echo "ZIP do MT7 não encontrado na raiz"
+            exit 1
+          fi
+
+          mkdir -p /tmp/mt7-source
+          unzip -q "$archive" -d /tmp/mt7-source
+
+          settings_file="$(find /tmp/mt7-source -type f -name settings.gradle.kts -print -quit)"
+          if [ -z "$settings_file" ]; then
+            echo "settings.gradle.kts não encontrado no ZIP"
+            exit 1
+          fi
+
+          project_dir="$(dirname "$settings_file")"
+          rsync -a --exclude='.github/' "$project_dir"/ ./
+
+          test -f app/build.gradle.kts
+          test -d app/src
+
+      - name: Configure Android 16 SDK
+        run: |
+          sed -i 's/compileSdk = 37/compileSdk = 36/' app/build.gradle.kts
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK tools
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
@@ -39,12 +66,12 @@ jobs:
             "ndk;28.2.13676358" \
             "cmake;3.22.1"
 
-      - name: Set up Gradle 9.6.0
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.6.0'
 
-      - name: Run unit tests and build APK
+      - name: Test and build APK
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
 
       - name: Upload debug APK
