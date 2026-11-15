@@ -1,5 +1,5 @@
 
-name: Inspect MT7 Source
+name: MT7 - Diagnostico do codigo
 
 on:
   workflow_dispatch:
@@ -12,20 +12,20 @@ permissions:
 
 jobs:
   inspect:
-    name: Inspect MT7 Kotlin Files
+    name: Preparar diagnostico MT7
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Checkout source
+      - name: Baixar repositorio
         uses: actions/checkout@v6
 
-      - name: Extract MT7 source ZIP
+      - name: Extrair codigo MT7
         run: |
           archive="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
 
           if [ -z "$archive" ]; then
-            echo "ZIP do MT7 não encontrado"
+            echo "ERRO: ZIP do MT7 nao encontrado na raiz."
             exit 1
           fi
 
@@ -35,7 +35,7 @@ jobs:
           settings_file="$(find /tmp/mt7-source -type f -name settings.gradle.kts -print -quit)"
 
           if [ -z "$settings_file" ]; then
-            echo "Projeto Gradle não encontrado"
+            echo "ERRO: Projeto Gradle nao encontrado."
             exit 1
           fi
 
@@ -43,23 +43,45 @@ jobs:
           rsync -a --exclude='.github/' "$project_dir"/ ./
 
           test -f app/build.gradle.kts
+          test -d app/src
 
-      - name: Show Kotlin files with errors
+      - name: Preparar arquivos para diagnostico
         run: |
-          for file in \
-            app/src/main/java/com/mt7/keymapper/core/activation/PrivilegedCommandRunner.kt \
-            app/src/main/java/com/mt7/keymapper/core/devices/InputDeviceInspector.kt \
-            app/src/main/java/com/mt7/keymapper/core/injection/UinputTouchSession.kt \
-            app/src/main/java/com/mt7/keymapper/core/input/OtgInputEventReader.kt \
-            app/src/main/java/com/mt7/keymapper/ui/MT7App.kt \
-            app/src/main/java/com/mt7/keymapper/ui/devices/MouseDiagnosticsPanel.kt
-          do
-            echo ""
-            echo "========== $file =========="
+          mkdir -p mt7-diagnostico
+
+          files=(
+            "app/src/main/java/com/mt7/keymapper/core/activation/PrivilegedCommandRunner.kt"
+            "app/src/main/java/com/mt7/keymapper/core/devices/InputDeviceInspector.kt"
+            "app/src/main/java/com/mt7/keymapper/core/injection/UinputTouchSession.kt"
+            "app/src/main/java/com/mt7/keymapper/core/input/OtgInputEventReader.kt"
+            "app/src/main/java/com/mt7/keymapper/ui/MT7App.kt"
+            "app/src/main/java/com/mt7/keymapper/ui/devices/MouseDiagnosticsPanel.kt"
+            "app/build.gradle.kts"
+            "build.gradle.kts"
+            "gradle/libs.versions.toml"
+          )
+
+          for file in "${files[@]}"; do
             if [ -f "$file" ]; then
-              cat "$file"
+              mkdir -p "mt7-diagnostico/$(dirname "$file")"
+              cp "$file" "mt7-diagnostico/$file"
+              echo "OK: $file"
             else
-              echo "ARQUIVO NÃO ENCONTRADO"
+              echo "AUSENTE: $file"
             fi
           done
+
+          echo "Diagnostico preparado."
+
+      - name: Compactar diagnostico
+        run: |
+          zip -qr mt7-source-diagnostico.zip mt7-diagnostico
+
+      - name: Disponibilizar arquivos
+        uses: actions/upload-artifact@v4
+        with:
+          name: mt7-source-diagnostico
+          path: mt7-source-diagnostico.zip
+          if-no-files-found: error
+          retention-days: 7
           
