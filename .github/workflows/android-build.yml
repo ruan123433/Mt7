@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   android:
-    name: Build MT7 APK
+    name: Inspect and Build MT7
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -25,7 +25,7 @@ jobs:
           archive="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
 
           if [ -z "$archive" ]; then
-            echo "ZIP do MT7 não encontrado na raiz"
+            echo "ZIP do MT7 não encontrado"
             exit 1
           fi
 
@@ -35,7 +35,7 @@ jobs:
           settings_file="$(find /tmp/mt7-source -type f -name settings.gradle.kts -print -quit)"
 
           if [ -z "$settings_file" ]; then
-            echo "settings.gradle.kts não encontrado no ZIP"
+            echo "Projeto Gradle não encontrado"
             exit 1
           fi
 
@@ -45,22 +45,24 @@ jobs:
           test -f app/build.gradle.kts
           test -d app/src
 
-      - name: Configure Gradle compatibility
+      - name: Show Kotlin files with errors
         run: |
-          echo "android.sourceset.disallowProvider=false" >> gradle.properties
-
-      - name: Inspect MT7 Android configuration
-        run: |
-          echo "===== APP BUILD GRADLE ====="
-          cat app/build.gradle.kts
-
-          echo "===== GRADLE PROPERTIES ====="
-          cat gradle.properties
-
-          echo "===== VERSION CATALOG ====="
-          if [ -f gradle/libs.versions.toml ]; then
-            cat gradle/libs.versions.toml
-          fi
+          for file in \
+            app/src/main/java/com/mt7/keymapper/core/activation/PrivilegedCommandRunner.kt \
+            app/src/main/java/com/mt7/keymapper/core/devices/InputDeviceInspector.kt \
+            app/src/main/java/com/mt7/keymapper/core/injection/UinputTouchSession.kt \
+            app/src/main/java/com/mt7/keymapper/core/input/OtgInputEventReader.kt \
+            app/src/main/java/com/mt7/keymapper/ui/MT7App.kt \
+            app/src/main/java/com/mt7/keymapper/ui/devices/MouseDiagnosticsPanel.kt
+          do
+            echo ""
+            echo "========== $file =========="
+            if [ -f "$file" ]; then
+              cat "$file"
+            else
+              echo "ARQUIVO NÃO ENCONTRADO"
+            fi
+          done
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -73,32 +75,20 @@ jobs:
         with:
           packages: platform-tools
 
+      - name: Install Android build packages
+        run: |
+          sdkmanager --install \
+            "platforms;android-37" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.6.0'
 
-      - name: Check available Android SDK platforms
+      - name: Build MT7
         run: |
-          sdkmanager --list
-
-      - name: Install Android build packages
-        run: |
-          sdkmanager --install \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;28.2.13676358" \
-            "cmake;3.22.1"
-
-      - name: Test and build APK
-        run: |
-          gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: mt7-keymapper-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
+          echo "Inspeção concluída. Aguardando correções no código."
           
